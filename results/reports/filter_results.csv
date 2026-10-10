@@ -1,0 +1,8 @@
+filter,kernel,recovered_label,confidence,car_recovered,ssim
+Gaussian,3,car,0.9253,True,0.9602
+Median,3,car,0.9159,True,0.9586
+Gaussian,5,car,0.9287,True,0.9294
+Median,5,car,0.922,True,0.8928
+Gaussian,7,car,0.9301,True,0.8841
+Median,7,car,0.921,True,0.8374
+Bilateral,N/A,car,0.9199,True,0.9263

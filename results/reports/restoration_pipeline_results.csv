@@ -1,0 +1,7 @@
+pipeline,recovered_label,confidence,car_recovered,ssim
+Gaussian 3x3,car,0.9253,True,0.9602
+Gaussian 3x3 + Opening 3x3,car,0.9207,True,0.9299
+Gaussian 3x3 + Closing 3x3,car,0.9216,True,0.9315
+Median 3x3,car,0.9159,True,0.9586
+Median 3x3 + Opening 3x3,car,0.9122,True,0.9308
+Median 3x3 + Closing 3x3,car,0.9111,True,0.9332
