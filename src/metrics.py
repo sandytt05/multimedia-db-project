@@ -20,11 +20,20 @@ def calculate_ssim(clean_path, other_path):
 
 
 if __name__ == "__main__":
-    clean_path = "data/clean/car1.jpg"
-    other_path = "data/clean/car1.jpg"
+    clean = "data/clean/car1.jpg"
 
-    psnr = calculate_psnr(clean_path, other_path)
-    ssim = calculate_ssim(clean_path, other_path)
+    poisoned_images = [
+        "data/poisoned/car1_clock_eps2.jpg",
+        "data/poisoned/car1_clock_eps4.jpg",
+        "data/poisoned/car1_clock_eps6.jpg",
+        "data/poisoned/car1_clock_eps8.jpg"
+    ]
 
-    print("PSNR:", psnr)
-    print("SSIM:", ssim)
+    for poisoned in poisoned_images:
+        psnr = calculate_psnr(clean, poisoned)
+        ssim = calculate_ssim(clean, poisoned)
+
+        print()
+        print(poisoned)
+        print("PSNR:", round(psnr, 4))
+        print("SSIM:", round(ssim, 4))

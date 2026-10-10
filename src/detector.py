@@ -24,11 +24,66 @@ def detect_image(image_path):
 
     return detections
 
+def evaluate_attack_success(
+    detections,
+    target_label="clock",
+    confidence_threshold=0.60
+):
+    target_detections = [
+        detection
+        for detection in detections
+        if detection["label"] == target_label
+    ]
+
+    if not target_detections:
+        return False, 0.0
+
+    best_target = max(
+        target_detections,
+        key=lambda detection: detection["confidence"]
+    )
+
+    target_confidence = best_target["confidence"]
+    success = target_confidence >= confidence_threshold
+
+    return success, target_confidence
 
 if __name__ == "__main__":
-    detections = detect_image("data/poisoned/car1_clock_eps4.jpg")
+    epsilons = [2, 4, 6, 8]
 
-    for detection in detections:
-        print("Detected object:", detection["label"])
-        print("Confidence:", round(detection["confidence"], 4))
-        print("Bounding box:", detection["bbox"])
+    for epsilon in epsilons:
+        image_path = (
+            f"data/poisoned/"
+            f"car1_clock_eps{epsilon}.jpg"
+        )
+
+        detections = detect_image(image_path)
+
+        print()
+        print("Epsilon:", epsilon)
+        print("Image:", image_path)
+
+        if not detections:
+            print("No objects detected.")
+        else:
+            for detection in detections:
+                print("Detected object:", detection["label"])
+                print(
+                    "Confidence:",
+                    round(detection["confidence"], 4)
+                )
+                print("Bounding box:", detection["bbox"])
+
+        success, target_confidence = evaluate_attack_success(
+            detections,
+            target_label="clock",
+            confidence_threshold=0.60
+        )
+
+        print("Target class: clock")
+        print("Target confidence threshold: 0.60")
+        print(
+            "Target confidence:",
+            round(target_confidence, 4)
+        )
+        print("Attack successful:", success)
