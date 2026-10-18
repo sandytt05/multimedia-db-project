@@ -16,3 +16,18 @@ Restored confidence: 0.9236
 PSNR: 28.2382 dB
 SSIM: 0.9366
 Filter log: Gaussian, kernel 3x3, sigma 0
+
+
+#step 26
+
+Descriptor type: HSV color histogram
+Hue bins: 16
+Saturation bins: 16
+Feature vector size: 256
+Normalization: OpenCV histogram normalization
+
+#step 27
+
+Similarity metric: Bhattacharyya distance
+Descriptor: 16×16 HSV histogram
+Interpretation: lower distance means greater visual similarity
