@@ -5,3 +5,14 @@ Gaussian 3x3 + Closing 3x3,car,0.9216,True,0.9315
 Median 3x3,car,0.9159,True,0.9586
 Median 3x3 + Opening 3x3,car,0.9122,True,0.9308
 Median 3x3 + Closing 3x3,car,0.9111,True,0.9332
+
+
+
+#step 21 record 
+
+Restoration pipeline: Gaussian 3x3
+Restored label: car
+Restored confidence: 0.9236
+PSNR: 28.2382 dB
+SSIM: 0.9366
+Filter log: Gaussian, kernel 3x3, sigma 0

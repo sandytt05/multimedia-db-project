@@ -19,21 +19,38 @@ def calculate_ssim(clean_path, other_path):
     return structural_similarity(clean_gray, other_gray, data_range=255)
 
 
+# if __name__ == "__main__":
+#     clean = "data/clean/car1.jpg"
+
+#     poisoned_images = [
+#         "data/poisoned/car1_clock_eps2.jpg",
+#         "data/poisoned/car1_clock_eps4.jpg",
+#         "data/poisoned/car1_clock_eps6.jpg",
+#         "data/poisoned/car1_clock_eps8.jpg"
+#     ]
+
+#     for poisoned in poisoned_images:
+#         psnr = calculate_psnr(clean, poisoned)
+#         ssim = calculate_ssim(clean, poisoned)
+
+#         print()
+#         print(poisoned)
+#         print("PSNR:", round(psnr, 4))
+#         print("SSIM:", round(ssim, 4))
+
 if __name__ == "__main__":
-    clean = "data/clean/car1.jpg"
+    clean_path = "data/clean/car1.jpg"
+    restored_path = "data/restored/car1_clock_restored.jpg"
 
-    poisoned_images = [
-        "data/poisoned/car1_clock_eps2.jpg",
-        "data/poisoned/car1_clock_eps4.jpg",
-        "data/poisoned/car1_clock_eps6.jpg",
-        "data/poisoned/car1_clock_eps8.jpg"
-    ]
+    psnr = calculate_psnr(
+        clean_path,
+        restored_path
+    )
 
-    for poisoned in poisoned_images:
-        psnr = calculate_psnr(clean, poisoned)
-        ssim = calculate_ssim(clean, poisoned)
+    ssim = calculate_ssim(
+        clean_path,
+        restored_path
+    )
 
-        print()
-        print(poisoned)
-        print("PSNR:", round(psnr, 4))
-        print("SSIM:", round(ssim, 4))
+    print("Restored PSNR:", round(psnr, 4))
+    print("Restored SSIM:", round(ssim, 4))

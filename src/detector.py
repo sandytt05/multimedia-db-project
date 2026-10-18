@@ -48,42 +48,65 @@ def evaluate_attack_success(
 
     return success, target_confidence
 
+# if __name__ == "__main__":
+#     epsilons = [2, 4, 6, 8]
+
+#     for epsilon in epsilons:
+#         image_path = (
+#             f"data/poisoned/"
+#             f"car1_clock_eps{epsilon}.jpg"
+#         )
+
+#         detections = detect_image(image_path)
+
+#         print()
+#         print("Epsilon:", epsilon)
+#         print("Image:", image_path)
+
+#         if not detections:
+#             print("No objects detected.")
+#         else:
+#             for detection in detections:
+#                 print("Detected object:", detection["label"])
+#                 print(
+#                     "Confidence:",
+#                     round(detection["confidence"], 4)
+#                 )
+#                 print("Bounding box:", detection["bbox"])
+
+#         success, target_confidence = evaluate_attack_success(
+#             detections,
+#             target_label="clock",
+#             confidence_threshold=0.60
+#         )
+
+#         print("Target class: clock")
+#         print("Target confidence threshold: 0.60")
+#         print(
+#             "Target confidence:",
+#             round(target_confidence, 4)
+#         )
+#         print("Attack successful:", success)
+
 if __name__ == "__main__":
-    epsilons = [2, 4, 6, 8]
+    image_path = "data/restored/car1_clock_restored.jpg"
 
-    for epsilon in epsilons:
-        image_path = (
-            f"data/poisoned/"
-            f"car1_clock_eps{epsilon}.jpg"
-        )
+    detections = detect_image(image_path)
 
-        detections = detect_image(image_path)
+    print()
+    print("Testing restored image:")
+    print("Image:", image_path)
 
-        print()
-        print("Epsilon:", epsilon)
-        print("Image:", image_path)
-
-        if not detections:
-            print("No objects detected.")
-        else:
-            for detection in detections:
-                print("Detected object:", detection["label"])
-                print(
-                    "Confidence:",
-                    round(detection["confidence"], 4)
-                )
-                print("Bounding box:", detection["bbox"])
-
-        success, target_confidence = evaluate_attack_success(
-            detections,
-            target_label="clock",
-            confidence_threshold=0.60
-        )
-
-        print("Target class: clock")
-        print("Target confidence threshold: 0.60")
-        print(
-            "Target confidence:",
-            round(target_confidence, 4)
-        )
-        print("Attack successful:", success)
+    if not detections:
+        print("No objects detected.")
+    else:
+        for detection in detections:
+            print("Detected object:", detection["label"])
+            print(
+                "Confidence:",
+                round(detection["confidence"], 4)
+            )
+            print(
+                "Bounding box:",
+                detection["bbox"]
+            )
