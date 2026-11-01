@@ -105,13 +105,14 @@ def blur_stability(image_path):
     if image is None:
         raise ValueError(f"Could not load image: {image_path}")
 
+    # Provisional setting selected using car1.
     blurred = cv2.GaussianBlur(
         image,
-        (3, 3),
+        (7, 7),
         0
     )
 
-    temp_path = "results/temp_blur.jpg"
+    temp_path = "results/temp_blur.png"
 
     os.makedirs(
         "results",
@@ -175,11 +176,24 @@ def high_frequency_energy(image_path):
 
     return float(energy)
 
-if __name__ == "__main__":
-    image_path = (
-        "data/poisoned/"
-        "car1_clock_eps8.jpg"
+def diagnose_image(
+    cbir_mismatch,
+    blur_changed,
+    high_frequency,
+    frequency_threshold
+):
+    score = (
+        int(cbir_mismatch)
+        + int(blur_changed)
+        + int(high_frequency > frequency_threshold)
     )
+
+    flagged = score >= 2
+
+    return flagged, score
+
+if __name__ == "__main__":
+    image_path = "data/poisoned/car1_clock_pgd_eps8.png"
 
     candidate_paths = (
         glob.glob("data/clean/*.jpg")
@@ -292,4 +306,15 @@ if __name__ == "__main__":
     print(
         "Poisoned image energy:",
         round(poisoned_energy, 4)
+    )
+        # Frequency is not calibrated yet, so use only the
+    # two validated signals for this exploratory decision.
+    flagged = result["mismatch"] and blur_result["changed"]
+
+    print()
+    print("Provisional diagnosis:")
+    print(
+        "POSSIBLY POISONED"
+        if flagged
+        else "INSUFFICIENT EVIDENCE OF POISONING"
     )

@@ -158,10 +158,10 @@ def restore_image(input_path, output_path):
     if image is None:
         raise ValueError(f"Could not load image: {input_path}")
 
-    # Best pipeline selected from Step 20 experiments
+    # Provisional setting selected from the car1 PGD experiment.
     restored = gaussian_filter(
         image,
-        kernel_size=3,
+        kernel_size=7,
         sigma=0
     )
 
@@ -170,7 +170,7 @@ def restore_image(input_path, output_path):
     filter_log = [
         {
             "operation": "gaussian",
-            "kernel_size": 3,
+            "kernel_size": 7,
             "sigma": 0
         }
     ]
@@ -594,8 +594,8 @@ def restore_image(input_path, output_path):
 
 
 if __name__ == "__main__":
-    input_path = "data/poisoned/car1_clock_eps8.jpg"
-    output_path = "data/restored/car1_clock_restored.jpg"
+    input_path = "data/poisoned/car1_clock_pgd_eps8.png"
+    output_path = "data/restored/car1_clock_pgd_restored.png"
 
     restored_image, filter_log = restore_image(
         input_path,
@@ -603,7 +603,14 @@ if __name__ == "__main__":
     )
 
     print("Restored image saved to:", output_path)
+    print("Filter log:", filter_log)
 
-    print("Filter log:")
-    for step in filter_log:
-        print(step)
+    detections = detect_image(output_path)
+    label, confidence = get_best_detection(detections)
+
+    print("Highest-confidence label:", label)
+    print("Confidence:", round(confidence, 4))
+    print(
+        "Car recovered:",
+        label == "car" and confidence >= 0.60
+    )
