@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from detector import detect_image
-from attack import create_targeted_perturbation
+from attack_pgd import targeted_pgd
 from filters import restore_image
 from metrics import calculate_psnr, calculate_ssim
 from descriptors import extract_histogram, compare_histograms
@@ -147,7 +147,7 @@ def save_attack_log(image_id, target, epsilon):
             """,
             (
                 image_id,
-                "reference-guided bounded perturbation",
+                "targeted PGD",
                 target,
                 epsilon
             )
@@ -348,7 +348,7 @@ with tabs[1]:
 
             target = st.text_input(
                 "Target YOLO class",
-                value="Clock"
+                value="clock"
             ).strip()
 
             epsilon = st.slider(
@@ -361,21 +361,24 @@ with tabs[1]:
             display_image(reference, "Reference image")
 
             st.caption(
-                "This reference-guided perturbation is a baseline, "
-                "not a guaranteed targeted adversarial attack."
-            )
+    "This attack uses targeted PGD to push YOLO toward the selected target class."
+)
 
             if st.button("Generate Poisoned Image"):
                 try:
                     filename = f"{uuid.uuid4().hex}.png"
                     output = POISONED_DIR / filename
 
-                    create_targeted_perturbation(
-                        str(clean_path),
-                        str(reference),
-                        str(output),
-                        epsilon=epsilon
-                    )
+                    targeted_pgd(
+    clean_path=str(clean_path),
+    output_path=str(output),
+    epsilon=epsilon,
+    steps=80,
+    step_size=1,
+    target_label=target,
+    reference_path=None,
+    source_label="car",
+)
 
                     detection = main_detection(output)
                     label = detection["label"] if detection else None
@@ -408,7 +411,9 @@ with tabs[1]:
 
                 except Exception as error:
                     st.error(f"Attack failed: {error}")
+                    st.exception(error)
 
+                
     if st.session_state.get("poisoned_path"):
         st.subheader("Attack Result")
 
