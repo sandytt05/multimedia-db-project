@@ -2,3 +2,24 @@ venv/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Python environment
+venv/
+__pycache__/
+*.pyc
+
+# Generated images
+data/uploads/
+data/clean/
+data/poisoned/
+data/restored/
+results/difference_maps/
+
+# Local SQLite database
+database/*.db
+database/*.db-journal
+database/*.db-wal
+database/*.db-shm
+
+# Local temporary files
+results/temp_*
