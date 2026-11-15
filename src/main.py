@@ -15,6 +15,7 @@ from database import store_restoration
 from database import search_images_by_label
 from attack_pgd import targeted_pgd
 from database import store_attack
+from database import get_image_lineage, list_images, store_restoration
 from database import (
     create_tables,
     list_images,
@@ -387,185 +388,113 @@ def diagnose_selected_image():
         print("Image file not found:", image_path)
         return
 
-    candidates = sorted(
-        str(path)
-        for folder in ["data/clean", "data/reference"]
-        for path in Path(folder).rglob("*")
-        if path.suffix.lower() in {".jpg", ".jpeg", ".png"}
-        and path.resolve() != image_path.resolve()
-    )
-
-    if not candidates:
-        print("No reference images available for CBIR diagnosis.")
-        return
-
     try:
-        mismatch = cbir_label_mismatch(
-            str(image_path),
-            candidates,
-            top_k=5
-        )
-        blur = blur_stability(str(image_path))
-
-        flagged = bool(
-            mismatch["mismatch"] and blur["changed"]
-        )
-
-        print("\nDiagnosis:")
-        print("YOLO label:", mismatch["yolo_label"])
-        print("CBIR majority label:", mismatch["cbir_label"])
-        print("CBIR mismatch:", mismatch["mismatch"])
-        print("Label after blur:", blur["blurred_label"])
-        print("Prediction changed:", blur["changed"])
-        print(
-            "Decision:",
-            "POSSIBLY POISONED"
-            if flagged
-            else "INSUFFICIENT EVIDENCE OF POISONING"
+        resolved_path = image_path.resolve()
+        recorded = next(
+            (
+                row for row in list_images()
+                if row[2] == "poisoned"
+                and Path(row[1]).resolve() == resolved_path
+            ),
+            None,
         )
 
-        if flagged:
-            answer = input(
-                "\nTry restoring this image? y/n: "
-            ).strip().lower()
+        original_detections = detect_image(str(image_path))
+        current_label, current_confidence = get_best_detection(
+            original_detections
+        )
 
-            if answer == "y":
-                output_path = (
-                    Path("data/restored")
-                    / f"{image_path.stem}_{uuid4().hex[:8]}.png"
-                )
+        flagged = False
+        status = "Insufficient evidence of poisoning"
+        original_line = "Original label: Unknown"
 
-                restored, filter_log = restore_image(
-                    str(image_path),
-                    str(output_path)
-                )
+        if recorded is not None:
+            flagged = True
+            status = "Poisoned"
 
-                restored_detections = detect_image(
-                    str(output_path)
-                )
-                restored_label, restored_confidence = (
-                    get_best_detection(restored_detections)
-                )
-
-                print("\nRestoration result:")
-                print(
-                    "Before:",
-                    mismatch["yolo_label"],
-                    round(mismatch["yolo_confidence"], 4)
-                )
-                print(
-                    "After:",
-                    restored_label,
-                    round(restored_confidence, 4)
-                )
-                print("Saved image:", output_path)
-                print("Filter log:", filter_log)
-
-                parent_id, restored_id = store_restoration(
-                    input_path=str(image_path),
-                    output_path=str(output_path),
-                    original_detections=detect_image(
-                        str(image_path)
-                    ),
-                    restored_detections=restored_detections,
-                    original_descriptor=extract_histogram(
-                        str(image_path)
-                    ),
-                    restored_descriptor=extract_histogram(
-                        str(output_path)
-                    ),
-                    filter_log=filter_log
-                )
-
-                print("Input database ID:", parent_id)
-                print("Restored database ID:", restored_id)
-                print("Parent relationship and filter log stored.")
+            lineage = get_image_lineage(recorded[0])
+            if len(lineage) >= 2:
+                parent_label = lineage[-2][4]
+                if parent_label and parent_label.lower() != "none":
+                    original_line = f"Original label: {parent_label.title()}"
 
         else:
-            answer = input(
-                "\nImage was not flagged. "
-                "Try a targeted attack? y/n: "
-            ).strip().lower()
+            candidates = sorted(
+                str(path)
+                for folder in ("data/clean", "data/reference")
+                for path in Path(folder).rglob("*")
+                if path.is_file()
+                and path.suffix.lower() in {".jpg", ".jpeg", ".png"}
+                and path.resolve() != resolved_path
+            )
 
-            if answer == "y":
-                selection = select_target_reference()
+            if candidates:
+                mismatch = cbir_label_mismatch(
+                    str(image_path), candidates, top_k=5
+                )
+                blur = blur_stability(str(image_path))
+                flagged = bool(mismatch["mismatch"] and blur["changed"])
 
-                if selection is not None:
-                    target_label, reference = selection
+                if flagged:
+                    status = "Possibly poisoned"
+                    cbir_label = mismatch["cbir_label"]
 
-                    print("\nTarget:", target_label)
-                    print("Selected reference ID:", reference[0])
-                    print("Reference file:", reference[1])
-                    source_label = mismatch["yolo_label"]
-
-                    if source_label == "none":
-                        print("No source object detected.")
-                        return
-
-                    if source_label == target_label:
-                        print("Choose a target different from the source.")
-                        return
-
-                    output_path = (
-                        Path("data/poisoned")
-                        / f"{image_path.stem}_reference_pgd_"
-                          f"{uuid4().hex[:8]}.png"
-                    )
-
-                    targeted_pgd(
-                        clean_path=str(image_path),
-                        output_path=str(output_path),
-                        epsilon=8,
-                        steps=80,
-                        step_size=1,
-                        target_label=target_label,
-                        reference_path=reference[1],
-                        source_label=source_label
-                    )
-
-                    attacked_detections = detect_image(
-                        str(output_path)
-                    )
-
-                    success, target_confidence = (
-                        evaluate_attack_success(
-                            attacked_detections,
-                            target_label=target_label,
-                            confidence_threshold=0.60
+                    if (
+                        cbir_label
+                        and cbir_label.lower() != "none"
+                        and cbir_label == blur["blurred_label"]
+                    ):
+                        original_line = (
+                            f"Likely original label: {cbir_label.title()}"
                         )
-                    )
+            else:
+                print("No reference images available for CBIR diagnosis.")
 
-                    print("\nAttack result:")
-                    print("Original label:", source_label)
-                    print("Target label:", target_label)
-                    print(
-                        "Target confidence:",
-                        round(target_confidence, 4)
-                    )
-                    print("Target criterion met:", success)
-                    print("Saved image:", output_path)
+        print("\nDiagnosis:")
+        print(f"1. Status: {status}")
+        print(
+            "2. YOLO detects:",
+            current_label.title() if current_label != "none"
+            else "No object detected",
+        )
+        print(f"3. {original_line}")
 
-                    parent_id, attacked_id = store_attack(
-                        input_path=str(image_path),
-                        output_path=str(output_path),
-                        original_detections=detect_image(
-                            str(image_path)
-                        ),
-                        attacked_detections=attacked_detections,
-                        original_descriptor=extract_histogram(
-                            str(image_path)
-                        ),
-                        attacked_descriptor=extract_histogram(
-                            str(output_path)
-                        ),
-                        target_label=target_label,
-                        reference_id=reference[0],
-                        epsilon=8
-                    )
+        if not flagged:
+            return
 
-                    print("Input database ID:", parent_id)
-                    print("Attack database ID:", attacked_id)
-                    print("Attack metadata and parent relationship stored.")
+        answer = input("\nTry restoring this image? y/n: ").strip().lower()
+        if answer != "y":
+            return
+
+        output_path = (
+            Path("data/restored")
+            / f"{image_path.stem}_{uuid4().hex[:8]}.png"
+        )
+
+        _, filter_log = restore_image(str(image_path), str(output_path))
+        restored_detections = detect_image(str(output_path))
+        restored_label, restored_confidence = get_best_detection(
+            restored_detections
+        )
+
+        parent_id, restored_id = store_restoration(
+            input_path=str(image_path),
+            output_path=str(output_path),
+            original_detections=original_detections,
+            restored_detections=restored_detections,
+            original_descriptor=extract_histogram(str(image_path)),
+            restored_descriptor=extract_histogram(str(output_path)),
+            filter_log=filter_log,
+        )
+
+        print("\nRestoration result:")
+        print(f"Before: {current_label} {current_confidence:.4f}")
+        print(f"After: {restored_label} {restored_confidence:.4f}")
+        print("Saved image:", output_path)
+        print("Filter log:", filter_log)
+        print("Input database ID:", parent_id)
+        print("Restored database ID:", restored_id)
+        print("Parent relationship and filter log stored.")
 
     except Exception as error:
         print("Diagnosis failed:", error)

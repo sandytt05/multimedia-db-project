@@ -343,7 +343,7 @@ with tabs[1]:
             reference = st.selectbox(
                 "Select reference image",
                 references,
-                format_func=lambda path: path.name
+                format_func=diagnosis_option,
             )
 
             target = st.text_input(
@@ -651,11 +651,7 @@ with tabs[4]:
 
 with tabs[5]:
     st.header("Image Diagnosis")
-
-    st.write(
-        "Inspect prediction stability, visual similarity, "
-        "and high-frequency image energy."
-    )
+    st.write("Inspect the recorded status, YOLO prediction, and visual similarity.")
 
     candidates = (
         list_images(CLEAN_DIR)
@@ -663,95 +659,169 @@ with tabs[5]:
         + list_images(RESTORED_DIR)
     )
 
+    records = read_images()
+
+    def resolve_db_path(filepath):
+        if pd.isna(filepath):
+            return None
+        return (ROOT / Path(filepath)).resolve()
+
+    record_paths = records["filepath"].map(resolve_db_path)
+    record_ids_by_path = {}
+
+    for image_id, path in zip(records["id"], record_paths):
+        if path is not None and path.is_file():
+            record_ids_by_path.setdefault(path, []).append(int(image_id))
+
+    candidates = list(dict.fromkeys(
+        [path.resolve() for path in candidates if path.is_file()]
+        + list(record_ids_by_path)
+    ))
+
+    def diagnosis_option(path):
+        name = f"{path.parent.name}/{path.name}"
+        ids = record_ids_by_path.get(path, [])
+        if ids:
+            return f"ID {', '.join(map(str, ids))} — {name}"
+        return name
+
     if not candidates:
         st.info("No images available for diagnosis.")
-
     else:
         selected_path = st.selectbox(
             "Select image",
             candidates,
-            format_func=lambda path: (
-                f"{path.parent.name}/{path.name}"
-            )
+            format_func=diagnosis_option,
+            key="diagnosis_image",
         )
 
         if st.button("Analyze Image"):
             try:
                 image = cv2.imread(str(selected_path))
-                gray = cv2.cvtColor(
-                    image,
-                    cv2.COLOR_BGR2GRAY
-                )
+                if image is None:
+                    raise ValueError(f"Could not read image: {selected_path}")
 
-                laplacian = cv2.Laplacian(
-                    gray,
-                    cv2.CV_64F
-                )
+                detection = main_detection(selected_path)
+                current_label = detection["label"] if detection else None
 
+                matches = records[record_paths == selected_path]
+                poisoned_matches = matches[matches["status"] == "poisoned"]
+                if not poisoned_matches.empty:
+                    matches = poisoned_matches
+
+                status = "Unknown (image not registered)"
+                source_label = "Unknown"
+
+                if not matches.empty:
+                    record = matches.iloc[0]
+                    stored_status = str(record["status"]).strip().lower()
+                    status = (
+                        "Possibly poisoned"
+                        if stored_status == "flagged"
+                        else stored_status.capitalize()
+                    )
+
+                    if stored_status == "poisoned":
+                        with sqlite3.connect(DB_PATH) as conn:
+                            has_outcomes = conn.execute(
+                                """
+                                SELECT 1 FROM sqlite_master
+                                WHERE type = 'table'
+                                  AND name = 'baseline_outcomes'
+                                """
+                            ).fetchone()
+
+                            if has_outcomes:
+                                outcome = conn.execute(
+                                    """
+                                    SELECT target_reached
+                                    FROM baseline_outcomes
+                                    WHERE image_id = ?
+                                    """,
+                                    (int(record["id"]),),
+                                ).fetchone()
+
+                                if outcome is not None and outcome[0] == 0:
+                                    status = "Perturbed — target not reached"
+
+                    label = None
+
+                    if stored_status == "clean":
+                        label = record["detected_label"]
+                    else:
+                        parent_id = record["parent_id"]
+                        seen = {int(record["id"])}
+
+                        while pd.notna(parent_id) and int(parent_id) not in seen:
+                            seen.add(int(parent_id))
+                            parents = records[records["id"] == int(parent_id)]
+                            if parents.empty:
+                                break
+
+                            parent = parents.iloc[0]
+                            if str(parent["status"]).strip().lower() == "clean":
+                                label = parent["detected_label"]
+                                break
+
+                            parent_id = parent["parent_id"]
+
+                    if pd.notna(label) and str(label).strip().lower() not in {"", "none"}:
+                        source_label = str(label).strip().title()
+
+                st.subheader("Diagnosis Result")
+                st.write("**1. Status:**", status)
+                st.write(
+                    "**2. YOLO detects:**",
+                    current_label.title() if current_label else "No object detected",
+                )
+                st.write("**3. Original label:**", source_label)
+
+                if detection:
+                    st.write("**Confidence:**", f'{detection["confidence"]:.4f}')
+                    if "bbox" in detection:
+                        st.write("**Bounding box:**", detection["bbox"])
+
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                laplacian = cv2.Laplacian(gray, cv2.CV_64F)
                 energy = float(np.mean(np.abs(laplacian)))
 
-                blurred = cv2.GaussianBlur(
-                    image,
-                    (3, 3),
-                    0
-                )
+                blurred = cv2.GaussianBlur(image, (3, 3), 0)
+                blur_path = UPLOAD_DIR / f"blur_{uuid.uuid4().hex}.png"
 
-                blur_path = UPLOAD_DIR / (
-                    f"blur_{uuid.uuid4().hex}.png"
-                )
-                cv2.imwrite(str(blur_path), blurred)
+                try:
+                    if not cv2.imwrite(str(blur_path), blurred):
+                        raise OSError("Could not save the blurred image.")
+                    blurred_detection = main_detection(blur_path)
+                finally:
+                    blur_path.unlink(missing_ok=True)
 
-                original_detection = main_detection(selected_path)
-                blurred_detection = main_detection(blur_path)
-
-                blur_path.unlink(missing_ok=True)
-
-                original_label = (
-                    original_detection["label"]
-                    if original_detection else None
-                )
                 blurred_label = (
-                    blurred_detection["label"]
-                    if blurred_detection else None
+                    blurred_detection["label"] if blurred_detection else None
                 )
-
-                st.subheader("YOLO Prediction")
-                show_detection(original_detection)
 
                 st.subheader("Stability Test")
-                st.write("Original prediction:", original_label)
-                st.write("After Gaussian blur:", blurred_label)
-                st.write(
-                    "Prediction changed:",
-                    original_label != blurred_label
-                )
-
-                st.metric(
-                    "High-frequency energy",
-                    f"{energy:.3f}"
-                )
+                st.write("Before blur:", current_label or "No object detected")
+                st.write("After Gaussian blur:", blurred_label or "No object detected")
+                st.write("Prediction changed:", current_label != blurred_label)
+                st.metric("High-frequency energy", f"{energy:.3f}")
 
                 st.subheader("Nearest Visual Neighbors")
                 neighbors = similar_images(selected_path, 5)
+
+                if not neighbors:
+                    st.info("No indexed neighbors found.")
 
                 for neighbor in neighbors:
                     st.write(
                         neighbor["label"],
                         "— distance:",
-                        f'{neighbor["distance"]:.4f}'
+                        f'{neighbor["distance"]:.4f}',
                     )
 
-                st.info(
-                    "These are diagnostic signals, not yet a "
-                    "calibrated clean/poisoned classification. "
-                    "Evaluate thresholds on labeled clean and "
-                    "poisoned images before enabling an "
-                    "automatic decision."
+                st.caption(
+                    "Status and original label come from the database. "
+                    "YOLO and the stability test analyze the selected file."
                 )
 
             except Exception as error:
                 st.error(f"Diagnosis failed: {error}")
-
-# --------------------------------------------------
-# END
-# --------------------------------------------------
