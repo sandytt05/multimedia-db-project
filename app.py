@@ -1,5 +1,5 @@
-
 from pathlib import Path
+from PIL import Image, ImageOps
 import sys
 import json
 import sqlite3
@@ -72,8 +72,28 @@ def save_upload(uploaded_file, directory):
 
 
 def display_image(path, caption=None):
-    st.image(str(path), caption=caption, width="stretch")
+    preview_width = st.session_state.get("preview_width", 440)
 
+    source = str(path) if isinstance(path, (str, Path)) else path
+
+    if hasattr(source, "seek"):
+        source.seek(0)
+
+    with Image.open(source) as opened:
+        preview = ImageOps.exif_transpose(opened).convert("RGB")
+
+        # Only resize the displayed preview.
+        # The original image file remains unchanged.
+        preview.thumbnail(
+            (preview_width, 280),
+            Image.Resampling.LANCZOS,
+        )
+
+    st.image(
+        preview,
+        caption=caption,
+        width=preview.width,
+    )
 
 def main_detection(path):
     detections = detect_image(str(path))
@@ -244,21 +264,180 @@ def similar_images(query_path, top_k=5):
 # 3. PAGE HEADER
 # --------------------------------------------------
 
-st.title("Adversarial Image Lab")
-st.caption(
-    "YOLO Detection | Image Attack | Restoration | "
-    "CBIR | Multimedia Database"
+st.markdown(
+    """
+<style>
+/* Main workspace */
+.stApp {
+    background-color: #f8fafc;
+    color: #1e293b;
+}
+
+[data-testid="stHeader"] {
+    background: transparent;
+}
+
+[data-testid="stMainBlockContainer"] {
+    max-width: 1200px;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+/* Dark sidebar */
+[data-testid="stSidebar"] {
+    background-color: #172334;
+    min-width: 230px;
+    max-width: 260px;
+}
+
+[data-testid="stSidebarContent"] {
+    padding-top: 0;
+}
+
+[data-testid="stSidebarUserContent"] {
+    padding-top: 1rem;
+}
+
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+    color: #e2e8f0 !important;
+}
+
+[data-testid="stSidebar"] hr {
+    border-color: #364152;
+}
+
+[data-testid="stSidebar"] button {
+    color: #e2e8f0;
+}
+
+/* Compact headings */
+[data-testid="stMain"] h1 {
+    font-size: 2rem !important;
+    font-weight: 700;
+    letter-spacing: -0.04rem;
+    color: #172334;
+}
+
+[data-testid="stMain"] h2 {
+    font-size: 1.35rem !important;
+    color: #172334;
+}
+
+[data-testid="stMain"] h3 {
+    font-size: 1.1rem !important;
+    color: #172334;
+}
+
+/* Navigation */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0.3rem;
+    flex-wrap: wrap;
+}
+
+.stTabs [data-baseweb="tab"] {
+    padding: 0.5rem 0.8rem;
+    border-radius: 6px;
+    color: #526174;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: #e7edf5;
+    color: #243f63 !important;
+}
+
+.stTabs [data-baseweb="tab-highlight"] {
+    background-color: #3d5f89 !important;
+}
+
+.stTabs [data-baseweb="tab-border"] {
+    background-color: #dce3ec;
+}
+
+/* Buttons */
+[data-testid="stBaseButton-primary"] {
+    background-color: #304f75;
+    border-color: #304f75;
+    color: white;
+    border-radius: 7px;
+}
+
+[data-testid="stBaseButton-primary"]:hover {
+    background-color: #243f63;
+    border-color: #243f63;
+    color: white;
+}
+
+/* Result cards */
+[data-testid="stMetric"] {
+    background-color: white;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+[data-testid="stMetricValue"] {
+    font-size: 1.5rem;
+}
+
+/* Compact previews */
+[data-testid="stImage"] img {
+    border-radius: 8px;
+    max-width: 100%;
+    height: auto;
+}
+
+/* Neutral upload area */
+[data-testid="stFileUploaderDropzone"] {
+    background-color: white;
+    border: 1px dashed #b8c4d3;
+    border-radius: 8px;
+}
+</style>
+    """,
+    unsafe_allow_html=True,
 )
 
 with st.sidebar:
-    st.header("Project")
-    st.write("Multimedia Database System")
-    st.write("Model: YOLOv8")
+    st.subheader("Vision Workspace")
+    st.caption("Multimedia Database Project")
+
     st.divider()
-    st.info(
-        "This application uses the Python modules "
-        "from the existing project."
+
+    st.markdown("**Workflow**")
+    st.caption(
+        "01  Upload & detect\n\n"
+        "02  Generate an attack\n\n"
+        "03  Restore & compare"
     )
+
+    st.divider()
+
+    st.markdown("**Display settings**")
+
+    st.slider(
+        "Preview width",
+        min_value=280,
+        max_value=600,
+        value=440,
+        step=40,
+        key="preview_width",
+        help="Changes displayed previews only.",
+    )
+
+    st.caption("Preview size does not affect image quality.")
+
+    st.divider()
+
+    st.caption("Sandy Taha · Perla Hoyek")
+    st.caption("YOLOv8 · SQLite · CBIR")
+
+st.title("Adversarial Image Lab")
+st.caption("Sandy Taha · Perla Hoyek")
+st.write("Detect objects, test targeted attacks, and compare recovery.")
 
 tabs = st.tabs([
     "Upload & Detect",
@@ -274,47 +453,77 @@ tabs = st.tabs([
 # --------------------------------------------------
 
 with tabs[0]:
-    st.header("Upload and Detect Objects")
+    st.header("Upload & Detect")
 
-    uploaded = st.file_uploader(
-        "Choose an image",
-        type=["jpg", "jpeg", "png"],
-        key="clean_upload"
+    controls, preview_column = st.columns(
+        [1, 1.4],
+        gap="large",
     )
 
-    if uploaded is not None:
-        st.image(uploaded, width="stretch")
-
-        if st.button("Run YOLO & Save", type="primary"):
-            try:
-                path = save_upload(uploaded, CLEAN_DIR)
-                detection = main_detection(path)
-
-                label = detection["label"] if detection else None
-                confidence = (
-                    detection["confidence"] if detection else None
-                )
-
-                image_id = insert_image(
-                    str(path),
-                    "clean",
-                    label,
-                    confidence
-                )
-
-                st.session_state["clean_path"] = str(path)
-                st.session_state["clean_id"] = image_id
-                st.session_state["clean_detection"] = detection
-
-            except Exception as error:
-                st.error(f"Upload failed: {error}")
-
-    if st.session_state.get("clean_path"):
-        st.subheader("Saved Image")
-        display_image(st.session_state["clean_path"])
-        show_detection(
-            st.session_state.get("clean_detection")
+    with controls:
+        uploaded = st.file_uploader(
+            "Choose an image",
+            type=["jpg", "jpeg", "png"],
+            key="clean_upload",
         )
+
+        if uploaded is not None:
+            if st.button(
+                "Run YOLO & Save",
+                type="primary",
+            ):
+                try:
+                    path = save_upload(uploaded, CLEAN_DIR)
+
+                    with st.spinner("Detecting objects..."):
+                        detection = main_detection(path)
+
+                    label = (
+                        detection["label"]
+                        if detection else None
+                    )
+
+                    confidence = (
+                        detection["confidence"]
+                        if detection else None
+                    )
+
+                    image_id = insert_image(
+                        str(path),
+                        "clean",
+                        label,
+                        confidence,
+                    )
+
+                    st.session_state["clean_path"] = str(path)
+                    st.session_state["clean_id"] = image_id
+                    st.session_state["clean_detection"] = detection
+
+                    st.success(
+                        f"Saved to database · ID {image_id}"
+                    )
+
+                except Exception as error:
+                    st.error(f"Upload failed: {error}")
+
+        if st.session_state.get("clean_path"):
+            st.caption("Detection for the last saved image")
+            show_detection(
+                st.session_state.get("clean_detection")
+            )
+
+    with preview_column:
+        if uploaded is not None:
+            display_image(
+                uploaded,
+                "Selected image",
+            )
+
+        elif st.session_state.get("clean_path"):
+            display_image(
+                st.session_state["clean_path"],
+                "Last saved image",
+            )
 
 # --------------------------------------------------
 # 5. IMAGE POISONING
@@ -330,126 +539,266 @@ with tabs[1]:
         st.warning("Upload a clean image first.")
 
     else:
+        display_image(clean_path, "Original image")
         references = list_images(REFERENCE_DIR)
 
-        display_image(clean_path, "Original image")
-
         if not references:
-            st.warning(
-                "Add reference images to data/reference first."
-            )
+            st.warning("Add reference images to data/reference first.")
 
         else:
-            reference = st.selectbox(
-                "Select reference image",
-                references,
-                format_func=diagnosis_option,
+            # Cache reference predictions until their files change.
+            reference_cache = st.session_state.setdefault(
+                "reference_detection_cache", {}
             )
+            references_by_label = {}
 
-            target = st.text_input(
-                "Target YOLO class",
-                value="clock"
-            ).strip()
+            for reference_path in references:
+                reference_path = Path(reference_path)
+                cache_key = (
+                    str(reference_path.resolve()),
+                    reference_path.stat().st_mtime_ns,
+                )
 
-            epsilon = st.slider(
-                "Perturbation strength (pixel units)",
-                min_value=1,
-                max_value=8,
-                value=4
-            )
+                if cache_key not in reference_cache:
+                    try:
+                        reference_cache[cache_key] = main_detection(
+                            reference_path
+                        )
+                    except Exception:
+                        reference_cache[cache_key] = None
 
-            display_image(reference, "Reference image")
+                reference_detection = reference_cache[cache_key]
 
-            st.caption(
-    "This attack uses targeted PGD to push YOLO toward the selected target class."
-)
+                if (
+                    reference_detection is not None
+                    and reference_detection["confidence"] >= 0.60
+                ):
+                    reference_label = (
+                        reference_detection["label"].strip().lower()
+                    )
+                    references_by_label.setdefault(
+                        reference_label, []
+                    ).append(reference_path)
 
-            if st.button("Generate Poisoned Image"):
-                try:
-                    filename = f"{uuid.uuid4().hex}.png"
-                    output = POISONED_DIR / filename
+            if not references_by_label:
+                st.warning(
+                    "No reference image has a YOLO detection with "
+                    "confidence ≥ 0.60. Add a clearer reference image."
+                )
 
-                    targeted_pgd(
-    clean_path=str(clean_path),
-    output_path=str(output),
-    epsilon=epsilon,
-    steps=80,
-    step_size=1,
-    target_label=target,
-    reference_path=None,
-    source_label="car",
-)
+            else:
+                targets = sorted(references_by_label)
+                default_index = (
+                    targets.index("clock") if "clock" in targets else 0
+                )
 
-                    detection = main_detection(output)
-                    label = detection["label"] if detection else None
-                    confidence = (
-                        detection["confidence"] if detection else None
+                target = st.selectbox(
+                    "Target YOLO class",
+                    targets,
+                    index=default_index,
+                    key="attack_target_class",
+                )
+
+                matching_references = references_by_label[target]
+
+                if len(matching_references) == 1:
+                    reference = matching_references[0]
+                    st.write(
+                        "**Automatically selected reference:**",
+                        reference.name,
+                    )
+                else:
+                    reference = st.selectbox(
+                        "Select matching reference image",
+                        matching_references,
+                        format_func=lambda path: path.name,
+                        key=f"attack_reference_{target}",
                     )
 
-                    image_id = insert_image(
-                        str(output),
-                        "poisoned",
-                        label,
-                        confidence,
-                        parent_id=clean_id
-                    )
+                display_image(
+                    reference,
+                    f"Reference for target: {target}",
+                )
 
-                    save_attack_log(image_id, target, epsilon)
+                epsilon = st.slider(
+                    "Perturbation strength (pixel units)",
+                    min_value=1,
+                    max_value=8,
+                    value=4,
+                    key="attack_epsilon",
+                )
 
-                    diff_path = DIFF_DIR / filename
-                    create_difference(
-                        clean_path,
-                        output,
-                        diff_path
-                    )
+                st.caption(
+                    "PGD changes the original image's pixels to "
+                    "encourage the selected target label, using "
+                    "the matching reference as guidance."
+                )
 
-                    st.session_state["poisoned_path"] = str(output)
-                    st.session_state["poisoned_id"] = image_id
-                    st.session_state["poisoned_detection"] = detection
-                    st.session_state["diff_path"] = str(diff_path)
-                    st.session_state["target"] = target
+                if st.button("Generate Poisoned Image"):
+                    try:
+                        source_detection = main_detection(clean_path)
 
-                except Exception as error:
-                    st.error(f"Attack failed: {error}")
-                    st.exception(error)
+                        if source_detection is None:
+                            st.warning(
+                                "No source object detected. "
+                                "Choose another original image."
+                            )
 
-                
+                        elif (
+                            source_detection["label"].strip().lower()
+                            == target
+                        ):
+                            st.warning(
+                                "Choose a target different from "
+                                "the original detected label."
+                            )
+
+                        else:
+                            source_label = source_detection["label"]
+                            filename = f"{uuid.uuid4().hex}.png"
+                            output = POISONED_DIR / filename
+
+                            with st.spinner(
+                                f"Generating attack: "
+                                f"{source_label} → {target}..."
+                            ):
+                                targeted_pgd(
+                                    clean_path=str(clean_path),
+                                    output_path=str(output),
+                                    epsilon=epsilon,
+                                    steps=80,
+                                    step_size=1,
+                                    target_label=target,
+                                    reference_path=str(reference),
+                                    source_label=source_label,
+                                )
+
+                                detections = detect_image(str(output))
+                                detection = (
+                                    max(
+                                        detections,
+                                        key=lambda item: item["confidence"],
+                                    )
+                                    if detections else None
+                                )
+
+                                target_confidence = max(
+                                    (
+                                        item["confidence"]
+                                        for item in detections
+                                        if item["label"].strip().lower()
+                                        == target
+                                    ),
+                                    default=0.0,
+                                )
+
+                                label = (
+                                    detection["label"]
+                                    if detection else None
+                                )
+                                confidence = (
+                                    detection["confidence"]
+                                    if detection else None
+                                )
+
+                                image_id = insert_image(
+                                    str(output),
+                                    "poisoned",
+                                    label,
+                                    confidence,
+                                    parent_id=clean_id,
+                                )
+
+                                save_attack_log(
+                                    image_id, target, epsilon
+                                )
+
+                                diff_path = DIFF_DIR / filename
+                                create_difference(
+                                    clean_path,
+                                    output,
+                                    diff_path,
+                                )
+
+                            st.session_state.update({
+                                "poisoned_path": str(output),
+                                "poisoned_id": image_id,
+                                "poisoned_detection": detection,
+                                "diff_path": str(diff_path),
+                                "target": target,
+                                "attack_target_confidence": float(
+                                    target_confidence
+                                ),
+                                "attack_source_path": str(clean_path),
+                                "attack_source_label": source_label,
+                                "attack_reference_path": str(reference),
+                            })
+
+                    except Exception as error:
+                        st.error(f"Attack failed: {error}")
+                        st.exception(error)
+
     if st.session_state.get("poisoned_path"):
-        st.subheader("Attack Result")
+        st.subheader("Last Generated Attack Result")
+
+        st.write(
+            "**Attack target:**",
+            st.session_state.get("target", "Unknown"),
+        )
+        st.write(
+            "**Original label:**",
+            st.session_state.get("attack_source_label", "Unknown"),
+        )
+
+        used_reference = st.session_state.get("attack_reference_path")
+        if used_reference:
+            st.write("**Reference used:**", Path(used_reference).name)
 
         col1, col2 = st.columns(2)
 
         with col1:
             display_image(
                 st.session_state["poisoned_path"],
-                "Poisoned image"
+                "Adversarial image",
             )
             show_detection(
-                st.session_state["poisoned_detection"]
+                st.session_state.get("poisoned_detection")
             )
 
         with col2:
             display_image(
                 st.session_state["diff_path"],
-                "Amplified difference map"
+                "Amplified difference map",
             )
 
-        detection = st.session_state["poisoned_detection"]
-        target = st.session_state["target"]
+        target_confidence = st.session_state.get(
+            "attack_target_confidence"
+        )
 
-        if (
-            detection is not None
-            and detection["label"].lower() == target.lower()
-            and detection["confidence"] >= 0.60
-        ):
-            st.success("Target detection reached the success threshold.")
+        if target_confidence is not None:
+            st.write(
+                "**Target confidence:**",
+                f"{target_confidence:.4f}",
+            )
+
+            if target_confidence >= 0.60:
+                st.success(
+                    "Target detection reached the success threshold."
+                )
+            else:
+                st.warning(
+                    "Target detection did not reach the success threshold."
+                )
         else:
-            st.warning("Target detection did not reach the success threshold.")
+            st.info(
+                "Generate a new attack to evaluate its target confidence."
+            )
 
-        if st.session_state.get("clean_path"):
+        source_path = st.session_state.get("attack_source_path")
+        if source_path:
             show_metrics(
-                st.session_state["clean_path"],
-                st.session_state["poisoned_path"]
+                source_path,
+                st.session_state["poisoned_path"],
             )
 
 # --------------------------------------------------
@@ -539,7 +888,7 @@ with tabs[3]:
         )
 
         if query_upload is not None:
-            st.image(query_upload, width=300)
+            display_image(query_upload, "Query image")
 
             if st.button("Find Similar Images"):
                 try:
